@@ -90,14 +90,17 @@ async function doRegister(){
   try{
     const cred = await fbAuth.createUserWithEmailAndPassword(email, pw);
     await fbCreateProfile(cred.user.uid, {name, email, role, agreedTermsAt:new Date().toISOString()});
+    let newCoach = null;
     DB.update(d=>{
       d.users.push({uid:cred.user.uid, role, name, email, pw:"", status:"active", agreedTermsAt:new Date().toISOString()});
       if(role==="coach"){
-        d.coaches.push({uid:cred.user.uid, name, em:"🏅", cat:"other", sub:"", region:d.regions[0], bio:"", quals:[], lessons:0,
-          rating:0, ratingCount:0, bookingCount:0, approved:false, confirmMode:"default",
-          featured:{pinned:false,pinOrder:0}, fps:"", payme:"", classes:[]});
+        newCoach = {uid:cred.user.uid, name, em:"🏅", cat:"other", sub:"", region:d.regions[0], bio:"", quals:[], lessons:0,
+          rating:0, ratingCount:0, bookingCount:0, approved:false, verified:false, confirmMode:"default",
+          featured:{pinned:false,pinOrder:0}, fps:"", payme:"", classes:[]};
+        d.coaches.push(newCoach);
       }
     });
+    if(newCoach) FS.pushCoach(newCoach);
     Session.set({uid:cred.user.uid, role, name});
     toast(role==="coach" ? "已註冊!教練帳戶需等Admin審批先會喺平台出現" : "註冊成功!");
     setTimeout(()=>location.href = dest(role), 900);
