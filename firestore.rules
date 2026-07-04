@@ -1,0 +1,20 @@
+// ===== Firestore Security Rules =====
+// 貼呢段去 Firebase Console → Firestore Database → Rules,然後 Publish
+//
+// 現階段淨係用嚟存 Auth 帳戶profile(users collection)。
+// 教練/預約/評價等主要資料暫時仍存喺 localStorage(demo mode),
+// 遲啲全面搬去 Firestore 嗰陣,我會補齊呢份rules。
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 用戶profile:自己可以讀寫自己嗰份,其他人得讀
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if false;
+    }
+  }
+}
