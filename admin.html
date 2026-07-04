@@ -3,14 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CoachUp HK — Admin</title>
+<title>ClassMates — Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Noto+Sans+HK:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body class="wide">
-<div class="app">
+
+<!-- 獨立Admin登入閘,唔經公開index.html -->
+<div class="loginwrap" id="gate">
+  <div class="logo">Class<span>Mates</span></div>
+  <div class="tag">管理後台</div>
+  <div class="frm">
+    <label>Admin Email</label>
+    <input id="a_email" type="email" autocomplete="username">
+    <label>密碼</label>
+    <input id="a_pw" type="password" autocomplete="current-password">
+    <button class="btn primary block" id="a_loginBtn">登入後台</button>
+  </div>
+  <div class="hint">此頁面只供已獲授權嘅Admin帳戶登入,唔對外公開連結。</div>
+</div>
+
+<div class="app" id="appRoot" style="display:none">
   <div class="topbar">
-    <div class="logo">Coach<span>Up</span> <span style="font-size:.7rem;color:var(--ink-2)">Admin</span></div>
+    <div class="logo">Class<span>Mates</span> <span style="font-size:.7rem;color:var(--ink-2)">Admin</span></div>
     <div class="spacer"></div>
     <button class="iconbtn" onclick="logout()">登出</button>
   </div>
@@ -64,24 +79,68 @@
     <tbody id="orderRows"></tbody></table>
   </div>
 
+  <!-- 糾紛/舉報 -->
+  <div class="page" id="pg-reports">
+    <div class="sec-title" style="font-size:1.2rem">糾紛 / 舉報</div>
+    <div class="tabs" id="rtabs">
+      <div class="tab on" data-t="open">待處理</div>
+      <div class="tab" data-t="resolved">已結案</div>
+    </div>
+    <div id="reportList"></div>
+  </div>
+
   <div class="bottomnav"><div class="inner">
     <button class="on" onclick="nav('dash',this)"><span class="em">📊</span>總覽</button>
     <button onclick="nav('coach',this)"><span class="em">🏋️</span>教練</button>
     <button onclick="nav('users',this)"><span class="em">👥</span>用戶</button>
     <button onclick="nav('cats',this)"><span class="em">🏷️</span>分類</button>
     <button onclick="nav('orders',this)"><span class="em">📋</span>預約</button>
+    <button onclick="nav('reports',this)"><span class="em">🚩</span>糾紛</button>
   </div></div>
 </div>
+</div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script src="firebase-init.js"></script>
 <script src="app.js"></script>
 <script>
-const me = requireRole("admin");
+function logout(){ Session.clear(); fbAuth.signOut(); location.reload(); }
+/* ---------- Admin獨立登入閘 ---------- */
+let me = null;
+document.getElementById("a_loginBtn").onclick = async ()=>{
+  const email = document.getElementById("a_email").value.trim().toLowerCase();
+  const pw = document.getElementById("a_pw").value;
+  if(!email||!pw) return toast("填埋Email同密碼先");
+  try{
+    const cred = await fbAuth.signInWithEmailAndPassword(email, pw);
+    const profile = await fbGetProfile(cred.user.uid);
+    if(!profile || profile.role!=="admin"){
+      await fbAuth.signOut();
+      return toast("呢個帳戶冇Admin權限");
+    }
+    Session.set({uid:cred.user.uid, role:"admin", name:profile.name});
+    enterAdmin({uid:cred.user.uid, role:"admin", name:profile.name});
+  }catch(e){ toast("登入失敗:"+(e.message||e.code)); }
+};
+function enterAdmin(u){
+  me = u;
+  document.getElementById("gate").style.display = "none";
+  document.getElementById("appRoot").style.display = "";
+  renderDash();
+}
+(function initGate(){
+  const s = Session.get();
+  if(s && s.role==="admin"){ enterAdmin(s); }
+})();
 function nav(p, btn){
   document.querySelectorAll(".page").forEach(x=>x.classList.remove("on"));
   document.getElementById("pg-"+p).classList.add("on");
   document.querySelectorAll(".bottomnav button").forEach(x=>x.classList.remove("on"));
   if(btn) btn.classList.add("on");
-  ({dash:renderDash, coach:renderCoach, users:renderUsers, cats:renderCats, orders:renderOrders}[p])();
+  ({dash:renderDash, coach:renderCoach, users:renderUsers, cats:renderCats, orders:renderOrders, reports:renderReports}[p])();
 }
 
 function renderDash(){
@@ -91,7 +150,8 @@ function renderDash(){
     {v:db.users.filter(u=>u.role==="student").length, l:"學員"},
     {v:db.coaches.filter(c=>c.approved).length, l:"已上架教練"},
     {v:db.bookings.filter(b=>new Date(b.createdAt)>monthAgo).length, l:"30日內預約"},
-    {v:db.coaches.filter(c=>!c.approved).length, l:"待審批教練"}
+    {v:db.coaches.filter(c=>!c.approved).length, l:"待審批教練"},
+    {v:db.reports.filter(r=>r.status==="open").length, l:"待處理舉報"}
   ].map(s=>`<div class="stat"><div class="v">${s.v}</div><div class="l">${s.l}</div></div>`).join("");
   const m = db.settings.defaultConfirmMode;
   document.getElementById("modeManual").className = "btn sm "+(m==="manual"?"primary":"ghost");
@@ -112,15 +172,23 @@ function renderCoach(){
 
   const live = db.coaches.filter(c=>c.approved);
   document.getElementById("liveCoach").innerHTML = live.map(c=>`
-    <div class="bcard"><div class="row1"><div class="nm">${c.em} ${c.name} ${c.featured.pinned?`<span class="badge" style="background:#FFE9DD;color:var(--orange)">📌 Pin #${c.featured.pinOrder}</span>`:""}</div>
+    <div class="bcard"><div class="row1"><div class="nm">${c.em} ${c.name} ${c.featured.pinned?`<span class="badge" style="background:#FFE9DD;color:var(--orange)">📌 Pin #${c.featured.pinOrder}</span>`:""} ${c.verified?'<span class="verified">🛡️已驗證</span>':""}</div>
     <div>⭐${c.rating||"–"}</div></div>
     <div class="mt">📍${c.region} · ${c.sub||"—"} · 預約${c.bookingCount||0}次</div>
+    ${c.qualDoc?`<div class="mt">📄 資歷文件: <a href="${c.qualDoc}" target="_blank" style="color:var(--green)">查看</a></div>`:'<div class="mt">📄 未上傳資歷文件</div>'}
     <div class="acts">
       ${c.featured.pinned
         ? `<button class="btn sm ghost" onclick="unpin('${c.uid}')">取消Pin</button>`
         : `<button class="btn sm ghost" onclick="pin('${c.uid}')">📌 Pin做推介</button>`}
+      ${c.verified
+        ? `<button class="btn sm ghost" onclick="toggleVerify('${c.uid}',false)">取消驗證</button>`
+        : `<button class="btn sm primary" onclick="toggleVerify('${c.uid}',true)">🛡️ 標記已驗證</button>`}
       <button class="btn sm danger" onclick="approve('${c.uid}',false)">下架</button>
     </div></div>`).join("");
+}
+function toggleVerify(uid, v){
+  DB.update(db=>{ const c=db.coaches.find(x=>x.uid===uid); c.verified=v; });
+  renderCoach(); toast(v?"已標記為已驗證":"已取消驗證狀態");
 }
 function approve(uid, ok){
   DB.update(db=>{ const c=db.coaches.find(x=>x.uid===uid); c.approved=ok; });
@@ -190,7 +258,41 @@ function cycleStatus(id){
   renderOrders();
 }
 
-renderDash();
+let rTab="open";
+document.addEventListener("click", e=>{
+  if(e.target.closest("#rtabs .tab")){
+    const t=e.target.closest(".tab");
+    document.querySelectorAll("#rtabs .tab").forEach(x=>x.classList.remove("on"));
+    t.classList.add("on"); rTab=t.dataset.t; renderReports();
+  }
+});
+const typeLabel = {cancel:"教練甩底/取消", conduct:"行為不當", quality:"教學質素爭議",
+  payment:"付款糾紛", injury:"受傷/意外", noshow:"學員爽約", coach_cancel:"教練取消(自動記錄)", other:"其他"};
+function renderReports(){
+  const db = DB.get();
+  const list = db.reports.filter(r=>r.status===rTab).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  const el = document.getElementById("reportList");
+  if(!list.length){ el.innerHTML = `<div class="empty">冇${rTab==="open"?"待處理":"已結案"}個案</div>`; return; }
+  el.innerHTML = list.map(r=>{
+    const c = db.coaches.find(x=>x.uid===r.coachId)||{name:"?"};
+    const isInjury = r.type==="injury";
+    return `<div class="bcard" ${isInjury?'style="border-color:var(--red)"':""}>
+      <div class="row1"><div class="nm">${isInjury?"🚨 ":""}${typeLabel[r.type]||r.type}</div>
+        <span class="st ${r.status==='open'?'open':'resolved'}">${r.status==='open'?'待處理':'已結案'}</span></div>
+      <div class="mt">舉報人:${r.reporterName}(${r.reporterRole==='coach'?'教練':'學員'}) → 關於教練:${c.name}</div>
+      <div class="mt">${r.desc}</div>
+      <div class="mt" style="color:var(--ink-2);font-size:.72rem">${fmtDT(r.createdAt)}</div>
+      ${r.status==="open"?`<div class="acts">
+        <button class="btn sm primary" onclick="resolveReport('${r.id}')">✓ 標記已結案</button>
+        <button class="btn sm danger" onclick="approve('${r.coachId}',false)">下架涉事教練</button>
+      </div>`:""}
+    </div>`;
+  }).join("");
+}
+function resolveReport(id){
+  DB.update(db=>{ const r=db.reports.find(x=>x.id===id); if(r) r.status="resolved"; });
+  renderReports(); toast("已標記結案"); renderDash();
+}
 </script>
 </body>
 </html>
