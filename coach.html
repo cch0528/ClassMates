@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CoachUp HK — 教練</title>
+<title>ClassMates — 教練</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Noto+Sans+HK:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="app">
   <div class="topbar">
-    <div class="logo">Coach<span>Up</span> <span style="font-size:.7rem;color:var(--ink-2)">教練版</span></div>
+    <div class="logo">Class<span>Mates</span> <span style="font-size:.7rem;color:var(--ink-2)">教練版</span></div>
     <div class="spacer"></div>
     <button class="iconbtn" onclick="logout()">登出</button>
   </div>
@@ -63,6 +63,9 @@
 <div class="sheet-mask" id="proofViewMask" onclick="if(event.target===this)this.classList.remove('on')">
   <div class="sheet" id="proofViewSheet"></div>
 </div>
+<div class="sheet-mask" id="reportMask" onclick="if(event.target===this)this.classList.remove('on')">
+  <div class="sheet" id="reportSheet"></div>
+</div>
 
 <script src="app.js"></script>
 <script>
@@ -108,6 +111,8 @@ function renderOrders(){
                <button class="btn sm danger" onclick="setStatus('${b.id}','cancelled')">✕ 取消</button>`;
     if(b.status==="confirmed")
       acts += `<button class="btn sm danger" onclick="setStatus('${b.id}','cancelled')">取消</button>`;
+    if(["confirmed","completed"].includes(b.status))
+      acts += `<button class="btn sm ghost" onclick="openReportStudent('${b.id}')">🚩 舉報/事故</button>`;
     return `<div class="bcard">
       <div class="row1"><div class="nm">${b.studentName}${cl?` · ${cl.ageGroup}`:""}</div>
         <span class="st ${b.status}">${statusLabel(b.status)}</span></div>
@@ -120,8 +125,49 @@ function renderOrders(){
   }).join("");
 }
 function setStatus(id, s){
+  if(s==="cancelled"){
+    const reason = prompt("取消原因(會記錄並通知平台):");
+    if(reason===null) return;
+    DB.update(db=>{
+      const b=db.bookings.find(x=>x.id===id); if(b){ b.status=s; b.coachCancelReason=reason; }
+      db.reports.push({id:DB.uid(), type:"coach_cancel", desc:reason||"(未填寫原因)",
+        reporterRole:"coach", reporterName:me.name, reporterId:me.uid,
+        coachId:me.uid, bookingId:id, status:"open", createdAt:new Date().toISOString()});
+    });
+    renderOrders(); toast("已取消,並已記錄俾平台跟進"); return;
+  }
   DB.update(db=>{ const b=db.bookings.find(x=>x.id===id); if(b) b.status=s; });
   renderOrders(); toast(s==="confirmed"?"已確認":"已取消");
+}
+function openReportStudent(bid){
+  document.getElementById("reportSheet").innerHTML = `
+    <div class="grab"></div>
+    <h2>舉報 / 事故報告</h2>
+    <div class="frm">
+      <label>類別</label>
+      <select id="rp_type">
+        <option value="noshow">學員爽約/唔到場</option>
+        <option value="conduct">行為不當</option>
+        <option value="payment">付款糾紛</option>
+        <option value="injury">受傷/意外事故</option>
+        <option value="other">其他</option>
+      </select>
+      <label>詳細描述</label>
+      <textarea id="rp_desc" rows="4" placeholder="請描述事情經過、時間、地點…"></textarea>
+      <button class="btn danger block" onclick="submitReportStudent('${bid}')">提交舉報</button>
+    </div>`;
+  document.getElementById("reportMask").classList.add("on");
+}
+function submitReportStudent(bid){
+  const desc = document.getElementById("rp_desc").value.trim();
+  if(!desc) return toast("請填寫詳細描述");
+  DB.update(db=>{
+    db.reports.push({id:DB.uid(), type:document.getElementById("rp_type").value, desc,
+      reporterRole:"coach", reporterName:me.name, reporterId:me.uid,
+      coachId:me.uid, bookingId:bid, status:"open", createdAt:new Date().toISOString()});
+  });
+  document.getElementById("reportMask").classList.remove("on");
+  toast("已提交,平台會於數日內跟進");
 }
 function viewProof(id){
   const b = DB.get().bookings.find(x=>x.id===id);
@@ -202,6 +248,12 @@ function renderProfile(){
   const db = DB.get();
   const c = myCoach(db);
   document.getElementById("profileForm").innerHTML = `
+    <div class="bcard" style="margin-bottom:2px">
+      <div class="row1"><div class="nm">資歷驗證狀態</div>
+        <span class="st ${c.verified?'confirmed':'pending_approval'}">${c.verified?'🛡️ 已驗證':'⏳ 未驗證'}</span></div>
+      <div class="mt">${c.verified?"你嘅資歷已經人手核實,學員會見到「已驗證」標籤":"上傳資歷證書相片/PDF連結,等Admin核實後可獲得「已驗證」標籤,提升學員信任"}</div>
+    </div>
+    <label>資歷證書連結(相片/PDF雲端連結)</label><input id="p_qualdoc" value="${c.qualDoc||""}" placeholder="貼Google Drive/相簿連結">
     <label>名稱</label><input id="p_name" value="${c.name}">
     <label>頭像Emoji</label><input id="p_em" value="${c.em}">
     <label>分類</label>
@@ -224,6 +276,9 @@ function renderProfile(){
 function saveProfile(){
   DB.update(db=>{
     const c = db.coaches.find(x=>x.uid===me.uid);
+    const newDoc = document.getElementById("p_qualdoc").value.trim();
+    if(newDoc !== (c.qualDoc||"")) c.verified = false; // 改咗文件要重新驗證
+    c.qualDoc = newDoc;
     c.name = document.getElementById("p_name").value.trim()||c.name;
     c.em = document.getElementById("p_em").value.trim()||"🏅";
     c.cat = document.getElementById("p_cat").value;
