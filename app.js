@@ -12,7 +12,7 @@ const SESSION_KEY = "coachup_session";
 /* ---------- demo/正式 開關 -----------
    main分支要set做false(正式,冇假資料/冇快速登入);
    demo分支set做true(保留假資料/快速登入,寫入獨立嘅demo_前綴collection,唔會撞正式資料)。 */
-const IS_DEMO = false;
+const IS_DEMO = true;
 const FS_PREFIX = IS_DEMO ? "demo_" : "";
 
 /* ---------- seed demo data ---------- */
