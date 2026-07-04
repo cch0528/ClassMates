@@ -29,6 +29,7 @@
     </label>
     <button class="btn primary block" id="loginBtn">登入</button>
     <button class="btn ghost block" id="regBtn">註冊新帳戶</button>
+    <button class="btn ghost block" id="quickBtn" style="border-style:dashed">⚡ 快速Demo登入(免Email/密碼)</button>
   </div>
 
   <div class="hint">
@@ -109,6 +110,34 @@ async function doRegister(){
 
 document.getElementById("loginBtn").onclick = doLogin;
 document.getElementById("regBtn").onclick = doRegister;
+
+/* ---------- 快速Demo登入(用Firebase匿名登入,免Email/密碼但仍然係真Auth,寫得入Firestore) ---------- */
+document.getElementById("quickBtn").onclick = async ()=>{
+  try{
+    const cred = await fbAuth.signInAnonymously();
+    let profile = await fbGetProfile(cred.user.uid);
+    if(!profile){
+      const name = role==="coach" ? "Demo教練"+cred.user.uid.slice(-4) : "Demo學員"+cred.user.uid.slice(-4);
+      profile = {name, email:"", role, agreedTermsAt:new Date().toISOString()};
+      await fbCreateProfile(cred.user.uid, profile);
+    }
+    Session.set({uid:cred.user.uid, role:profile.role, name:profile.name});
+    let newCoach = null;
+    DB.update(d=>{
+      if(!d.users.find(x=>x.uid===cred.user.uid)){
+        d.users.push({uid:cred.user.uid, role:profile.role, name:profile.name, email:"", pw:"", status:"active"});
+      }
+      if(profile.role==="coach" && !d.coaches.find(c=>c.uid===cred.user.uid)){
+        newCoach = {uid:cred.user.uid, name:profile.name, em:"🏅", cat:"other", sub:"", region:d.regions[0], bio:"", quals:[], lessons:0,
+          rating:0, ratingCount:0, bookingCount:0, approved:false, verified:false, confirmMode:"default",
+          featured:{pinned:false,pinOrder:0}, fps:"", payme:"", classes:[]};
+        d.coaches.push(newCoach);
+      }
+    });
+    if(newCoach) FS.pushCoach(newCoach);
+    location.href = dest(profile.role);
+  }catch(e){ toast("快速登入失敗:"+(e.message||e.code)+"(可能未開Anonymous登入方式)"); }
+};
 </script>
 </body>
 </html>
