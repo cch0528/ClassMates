@@ -162,3 +162,49 @@ function slotsForClass(coach, cls, db){
   }
   return out;
 }
+
+/* ===== Firestore即時同步(教練+預約 — 平台嘅核心交易資料) =====
+   分類/地區/年齡層/平台設定 暫時仍用local(admin改得少,遲啲先遷移)。
+   運作方式:onSnapshot實時聽Firestore,寫落local cache畀舊有同步UI code繼續用;
+   任何mutation完成後,call FS.pushCoach/pushBooking 寫返上Firestore,
+   咁樣其他裝置嘅onSnapshot就會收到更新。 */
+const FS = {
+  async pushCoach(c){
+    if(!c) return;
+    try{ await fbDB.collection("coaches").doc(c.uid).set(c); }
+    catch(e){ console.warn("Firestore教練同步失敗", e); }
+  },
+  async pushBooking(b){
+    if(!b) return;
+    try{ await fbDB.collection("bookings").doc(b.id).set(b); }
+    catch(e){ console.warn("Firestore預約同步失敗", e); }
+  },
+  async deleteCoach(uid){
+    try{ await fbDB.collection("coaches").doc(uid).delete(); }
+    catch(e){ console.warn("Firestore教練刪除失敗", e); }
+  },
+  async seedIfEmpty(){
+    try{
+      const snap = await fbDB.collection("coaches").limit(1).get();
+      if(!snap.empty) return;
+      const db = DB.get();
+      const batch = fbDB.batch();
+      db.coaches.forEach(c=> batch.set(fbDB.collection("coaches").doc(c.uid), c));
+      db.bookings.forEach(b=> batch.set(fbDB.collection("bookings").doc(b.id), b));
+      await batch.commit();
+    }catch(e){ console.warn("Firestore初始化種子資料失敗(可能未開Firestore/未登入)", e); }
+  },
+  initSync(onChange){
+    try{
+      fbDB.collection("coaches").onSnapshot(snap=>{
+        const coaches = snap.docs.map(d=>d.data());
+        if(coaches.length){ DB.update(db=>{ db.coaches = coaches; }); onChange && onChange(); }
+      }, e=>console.warn("coaches同步錯誤", e));
+      fbDB.collection("bookings").onSnapshot(snap=>{
+        const bookings = snap.docs.map(d=>d.data());
+        DB.update(db=>{ db.bookings = bookings; });
+        onChange && onChange();
+      }, e=>console.warn("bookings同步錯誤", e));
+    }catch(e){ console.warn("Firestore initSync失敗", e); }
+  }
+};
