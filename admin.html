@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="styles.css?v=1783147793">
 </head>
 <body class="wide">
+<div id="demoBanner" style="display:none;background:#FFD966;color:#3a2f00;text-align:center;font-weight:700;font-size:.78rem;padding:6px 10px">🟡 DEMO模式 — 呢度所有資料都係假嘅,唔係真實用戶</div>
 
 <!-- 獨立Admin登入閘,唔經公開index.html -->
 <div class="loginwrap" id="gate">
@@ -107,6 +108,7 @@
 <script src="firebase-init.js?v=1783147793"></script>
 <script src="app.js?v=1783147793"></script>
 <script>
+if(IS_DEMO) document.getElementById("demoBanner").style.display = "";
 function logout(){ Session.clear(); fbAuth.signOut(); location.reload(); }
 /* ---------- Admin獨立登入閘 ---------- */
 let me = null;

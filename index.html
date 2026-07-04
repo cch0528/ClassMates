@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="styles.css?v=1783147793">
 </head>
 <body>
+<div id="demoBanner" style="display:none;background:#FFD966;color:#3a2f00;text-align:center;font-weight:700;font-size:.78rem;padding:6px 10px">🟡 DEMO模式 — 呢度所有資料都係假嘅,唔係真實用戶</div>
 <div class="loginwrap">
   <div class="logo">Class<span>Mates</span></div>
   <div class="tag">興趣班・搵教練・即刻book</div>
@@ -44,6 +45,9 @@
 <script src="firebase-init.js?v=1783147793"></script>
 <script src="app.js?v=1783147793"></script>
 <script>
+if(IS_DEMO) document.getElementById("demoBanner").style.display = "";
+else document.getElementById("quickBtn").style.display = "none";
+
 let role = "student";
 const dest = r => ({student:"student.html", coach:"coach.html"}[r]);
 const roleName = r => ({student:"學員", coach:"教練"}[r]);

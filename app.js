@@ -9,6 +9,12 @@ const firebaseConfig = {
 const LS_KEY = "coachup_db_v1";
 const SESSION_KEY = "coachup_session";
 
+/* ---------- demo/正式 開關 -----------
+   main分支要set做false(正式,冇假資料/冇快速登入);
+   demo分支set做true(保留假資料/快速登入,寫入獨立嘅demo_前綴collection,唔會撞正式資料)。 */
+const IS_DEMO = false;
+const FS_PREFIX = IS_DEMO ? "demo_" : "";
+
 /* ---------- seed demo data ---------- */
 function seedDB(){
   const cats = [
@@ -20,6 +26,15 @@ function seedDB(){
   ];
   const regions = ["中西區","灣仔","東區","南區","油尖旺","深水埗","九龍城","黃大仙","觀塘","荃灣","屯門","元朗","北區","大埔","沙田","西貢","葵青","離島"];
   const ageGroups = ["幼兒 4-6歲","兒童 7-12歲","青少年 13-17歲","成人 18-59歲","長者 60+"];
+
+  // 正式環境:分類/地區/年齡層呢啲平台設定係真嘅,但唔要任何假教練/學員/預約身份資料
+  if(!IS_DEMO){
+    return {
+      cats, regions, ageGroups,
+      coaches:[], users:[], bookings:[], reviews:[], reports:[],
+      settings:{ defaultConfirmMode:"manual" }
+    };
+  }
 
   const coaches = [
     {uid:"c1", name:"陳Sir", em:"🏀", cat:"ball", sub:"籃球", region:"觀塘", bio:"前甲一球員,專注青少年基本功訓練,10年教學經驗。", quals:["HKBA註冊教練","急救證書"], lessons:150, rating:4.8, ratingCount:23, bookingCount:31, approved:true, confirmMode:"default", featured:{pinned:true,pinOrder:1},
@@ -121,8 +136,8 @@ const DB = {
 };
 
 /* ---------- session ---------- */
-// TEMP: 暫時skip login page,方便睇login打後嘅畫面。睇完想擋返login,將呢個set返做false。
-const DEV_SKIP_LOGIN = true;
+// Demo分支先skip login,方便一撳就睇login打後嘅畫面;正式分支(IS_DEMO=false)一定要行返真login。
+const DEV_SKIP_LOGIN = IS_DEMO;
 const DEV_DEMO_USER = { student:{uid:"s1", name:"Tyson"}, coach:{uid:"c1", name:"陳Sir"}, admin:{uid:"a1", name:"Admin"} };
 const Session = {
   set(u){ localStorage.setItem(SESSION_KEY, JSON.stringify(u)); },
@@ -196,36 +211,37 @@ function slotsForClass(coach, cls, db){
 const FS = {
   async pushCoach(c){
     if(!c) return;
-    try{ await fbDB.collection("coaches").doc(c.uid).set(c); }
+    try{ await fbDB.collection(FS_PREFIX+"coaches").doc(c.uid).set(c); }
     catch(e){ console.warn("Firestore教練同步失敗", e); }
   },
   async pushBooking(b){
     if(!b) return;
-    try{ await fbDB.collection("bookings").doc(b.id).set(b); }
+    try{ await fbDB.collection(FS_PREFIX+"bookings").doc(b.id).set(b); }
     catch(e){ console.warn("Firestore預約同步失敗", e); }
   },
   async deleteCoach(uid){
-    try{ await fbDB.collection("coaches").doc(uid).delete(); }
+    try{ await fbDB.collection(FS_PREFIX+"coaches").doc(uid).delete(); }
     catch(e){ console.warn("Firestore教練刪除失敗", e); }
   },
   async seedIfEmpty(){
+    if(!IS_DEMO) return; // 正式環境唔會自動seed假教練/假預約落Firestore
     try{
-      const snap = await fbDB.collection("coaches").limit(1).get();
+      const snap = await fbDB.collection(FS_PREFIX+"coaches").limit(1).get();
       if(!snap.empty) return;
       const db = DB.get();
       const batch = fbDB.batch();
-      db.coaches.forEach(c=> batch.set(fbDB.collection("coaches").doc(c.uid), c));
-      db.bookings.forEach(b=> batch.set(fbDB.collection("bookings").doc(b.id), b));
+      db.coaches.forEach(c=> batch.set(fbDB.collection(FS_PREFIX+"coaches").doc(c.uid), c));
+      db.bookings.forEach(b=> batch.set(fbDB.collection(FS_PREFIX+"bookings").doc(b.id), b));
       await batch.commit();
     }catch(e){ console.warn("Firestore初始化種子資料失敗(可能未開Firestore/未登入)", e); }
   },
   initSync(onChange){
     try{
-      fbDB.collection("coaches").onSnapshot(snap=>{
+      fbDB.collection(FS_PREFIX+"coaches").onSnapshot(snap=>{
         const coaches = snap.docs.map(d=>d.data());
         if(coaches.length){ DB.update(db=>{ db.coaches = coaches; }); onChange && onChange(); }
       }, e=>console.warn("coaches同步錯誤", e));
-      fbDB.collection("bookings").onSnapshot(snap=>{
+      fbDB.collection(FS_PREFIX+"bookings").onSnapshot(snap=>{
         const bookings = snap.docs.map(d=>d.data());
         DB.update(db=>{ db.bookings = bookings; });
         onChange && onChange();
