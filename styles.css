@@ -1,4 +1,4 @@
-/* ===== CoachUp HK — shared styles ===== */
+/* ===== ClassMates â€” shared styles ===== */
 :root{
   --bg:#F1F5F2;
   --card:#FFFFFF;
@@ -154,6 +154,9 @@ h1,h2,h3,.disp{font-family:"Space Grotesk","Noto Sans HK",sans-serif;letter-spac
 .st.completed{background:#E9ECEA;color:#4A5A53}
 .st.cancelled{background:#FCE7E7;color:var(--red)}
 .st.pending_approval{background:#EAE6FA;color:#5B41B5}
+.st.open{background:#FFE9DD;color:var(--orange)}
+.st.resolved{background:#E2F4EA;color:var(--green-dk)}
+.verified{background:#E6F0FF;color:#1B5FCC;font-size:.62rem;padding:2px 7px;border-radius:999px;font-weight:700}
 
 /* rating input */
 .starpick{display:flex;gap:6px;font-size:1.7rem;cursor:pointer;user-select:none}
