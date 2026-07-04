@@ -1,4 +1,4 @@
-/* ===== CoachUp HK — shared data layer =====
+/* ===== ClassMates — shared data layer =====
    DEMO MODE: 資料存喺 localStorage。
    之後貼咗 firebaseConfig 落嚟,我哋下一步先正式駁 Firebase (Auth + Firestore + Storage)。
 */
@@ -76,9 +76,13 @@ function seedDB(){
     {id:"r1", bookingId:"x", coachId:"c1", studentName:"家長Amy", stars:5, comment:"好有耐性,個仔學得好開心!", createdAt:d(-20,10)},
     {id:"r2", bookingId:"x", coachId:"c2", studentName:"Ken", stars:5, comment:"考三級一Take過,勁!", createdAt:d(-30,10)}
   ];
+  const reports = [];
+
+  // 教練驗證(資歷已人手核實)獨立於approved(上架與否)
+  coaches.forEach(c=>{ c.verified = ["c1","c2"].includes(c.uid); });
 
   return {
-    cats, regions, ageGroups, coaches, users, bookings, reviews,
+    cats, regions, ageGroups, coaches, users, bookings, reviews, reports,
     settings:{ defaultConfirmMode:"manual" } // manual=教練核實付款先確認 / auto=上傳咗即自動確認
   };
 }
@@ -106,10 +110,10 @@ const Session = {
 };
 function requireRole(role){
   const u = Session.get();
-  if(!u || u.role!==role){ location.href = "login.html"; return null; }
+  if(!u || u.role!==role){ location.href = "index.html"; return null; }
   return u;
 }
-function logout(){ Session.clear(); location.href="login.html"; }
+function logout(){ Session.clear(); location.href="index.html"; }
 
 /* ---------- shared utils ---------- */
 function toast(msg){
