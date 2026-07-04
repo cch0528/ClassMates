@@ -67,6 +67,11 @@
   <div class="sheet" id="reportSheet"></div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script src="firebase-init.js"></script>
 <script src="app.js"></script>
 <script>
 const me = requireRole("coach");
@@ -128,15 +133,19 @@ function setStatus(id, s){
   if(s==="cancelled"){
     const reason = prompt("取消原因(會記錄並通知平台):");
     if(reason===null) return;
+    let updated;
     DB.update(db=>{
-      const b=db.bookings.find(x=>x.id===id); if(b){ b.status=s; b.coachCancelReason=reason; }
+      const b=db.bookings.find(x=>x.id===id); if(b){ b.status=s; b.coachCancelReason=reason; updated=b; }
       db.reports.push({id:DB.uid(), type:"coach_cancel", desc:reason||"(未填寫原因)",
         reporterRole:"coach", reporterName:me.name, reporterId:me.uid,
         coachId:me.uid, bookingId:id, status:"open", createdAt:new Date().toISOString()});
     });
+    FS.pushBooking(updated);
     renderOrders(); toast("已取消,並已記錄俾平台跟進"); return;
   }
-  DB.update(db=>{ const b=db.bookings.find(x=>x.id===id); if(b) b.status=s; });
+  let updated;
+  DB.update(db=>{ const b=db.bookings.find(x=>x.id===id); if(b){ b.status=s; updated=b; } });
+  FS.pushBooking(updated);
   renderOrders(); toast(s==="confirmed"?"已確認":"已取消");
 }
 function openReportStudent(bid){
@@ -222,6 +231,7 @@ function saveClass(id){
     const v = document.getElementById("cl_d"+i).value.trim();
     if(v) weekly[i] = v.split(",").map(s=>s.trim()).filter(Boolean);
   }
+  let updated;
   DB.update(db=>{
     const c = db.coaches.find(x=>x.uid===me.uid);
     const data = {
@@ -232,14 +242,18 @@ function saveClass(id){
     };
     if(id){ Object.assign(c.classes.find(x=>x.id===id), data); }
     else c.classes.push({id:DB.uid(), ...data});
+    updated = c;
   });
+  FS.pushCoach(updated);
   document.getElementById("clsMask").classList.remove("on");
   renderClasses(); toast("已儲存");
 }
 function delClass(id){
   if(!confirm("刪除呢個班別?")) return;
+  let updated;
   DB.update(db=>{ const c=db.coaches.find(x=>x.uid===me.uid);
-    c.classes = c.classes.filter(x=>x.id!==id); });
+    c.classes = c.classes.filter(x=>x.id!==id); updated=c; });
+  FS.pushCoach(updated);
   renderClasses();
 }
 
@@ -274,6 +288,7 @@ function renderProfile(){
     <button class="btn primary block" onclick="saveProfile()">儲存</button>`;
 }
 function saveProfile(){
+  let updated;
   DB.update(db=>{
     const c = db.coaches.find(x=>x.uid===me.uid);
     const newDoc = document.getElementById("p_qualdoc").value.trim();
@@ -290,7 +305,9 @@ function saveProfile(){
     c.payme = document.getElementById("p_payme").value.trim();
     c.confirmMode = document.getElementById("p_mode").value;
     const u = db.users.find(x=>x.uid===me.uid); if(u) u.name=c.name;
+    updated = c;
   });
+  FS.pushCoach(updated);
   toast("已儲存"); banner();
 }
 
@@ -307,6 +324,7 @@ function renderReviews(){
 }
 
 banner(); renderOrders();
+FS.initSync(()=>{ banner(); renderOrders(); renderClasses(); });
 </script>
 </body>
 </html>
