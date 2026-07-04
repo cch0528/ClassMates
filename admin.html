@@ -130,6 +130,11 @@ function enterAdmin(u){
   document.getElementById("gate").style.display = "none";
   document.getElementById("appRoot").style.display = "";
   renderDash();
+  FS.seedIfEmpty().then(()=> FS.initSync(()=>{
+    renderDash();
+    if(document.getElementById("pg-coach").classList.contains("on")) renderCoach();
+    if(document.getElementById("pg-orders").classList.contains("on")) renderOrders();
+  }));
 }
 (function initGate(){
   const s = Session.get();
@@ -187,25 +192,34 @@ function renderCoach(){
     </div></div>`).join("");
 }
 function toggleVerify(uid, v){
-  DB.update(db=>{ const c=db.coaches.find(x=>x.uid===uid); c.verified=v; });
+  let updated;
+  DB.update(db=>{ const c=db.coaches.find(x=>x.uid===uid); c.verified=v; updated=c; });
+  FS.pushCoach(updated);
   renderCoach(); toast(v?"已標記為已驗證":"已取消驗證狀態");
 }
 function approve(uid, ok){
-  DB.update(db=>{ const c=db.coaches.find(x=>x.uid===uid); c.approved=ok; });
+  let updated;
+  DB.update(db=>{ const c=db.coaches.find(x=>x.uid===uid); c.approved=ok; updated=c; });
+  FS.pushCoach(updated);
   renderCoach(); toast(ok?"已批准":"已下架");
 }
 function removeCoach(uid){
   if(!confirm("拒絕並移除呢個教練申請?")) return;
   DB.update(db=>{ db.coaches=db.coaches.filter(x=>x.uid!==uid); });
+  FS.deleteCoach(uid);
   renderCoach();
 }
 function pin(uid){
   const order = parseInt(prompt("Pin排位(1=最前):","1"))||1;
-  DB.update(db=>{ const c=db.coaches.find(x=>x.uid===uid); c.featured={pinned:true,pinOrder:order}; });
+  let updated;
+  DB.update(db=>{ const c=db.coaches.find(x=>x.uid===uid); c.featured={pinned:true,pinOrder:order}; updated=c; });
+  FS.pushCoach(updated);
   renderCoach(); toast("已Pin");
 }
 function unpin(uid){
-  DB.update(db=>{ const c=db.coaches.find(x=>x.uid===uid); c.featured={pinned:false,pinOrder:0}; });
+  let updated;
+  DB.update(db=>{ const c=db.coaches.find(x=>x.uid===uid); c.featured={pinned:false,pinOrder:0}; updated=c; });
+  FS.pushCoach(updated);
   renderCoach();
 }
 
@@ -253,8 +267,10 @@ function renderOrders(){
 }
 function cycleStatus(id){
   const order = ["pending_payment","pending_verify","confirmed","completed","cancelled"];
+  let updated;
   DB.update(db=>{ const b=db.bookings.find(x=>x.id===id);
-    b.status = order[(order.indexOf(b.status)+1)%order.length]; });
+    b.status = order[(order.indexOf(b.status)+1)%order.length]; updated=b; });
+  FS.pushBooking(updated);
   renderOrders();
 }
 
