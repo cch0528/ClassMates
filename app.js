@@ -91,7 +91,18 @@ function seedDB(){
 function loadDB(){
   let raw = localStorage.getItem(LS_KEY);
   if(!raw){ const db = seedDB(); localStorage.setItem(LS_KEY, JSON.stringify(db)); return db; }
-  return JSON.parse(raw);
+  let db = JSON.parse(raw);
+  // 防禦性檢查:如果係舊版/唔完整嘅cache資料(冇cats/regions等),自動補返
+  if(!db.cats || !db.cats.length || !db.regions || !db.ageGroups || !db.reports){
+    const fresh = seedDB();
+    db.cats = db.cats && db.cats.length ? db.cats : fresh.cats;
+    db.regions = db.regions && db.regions.length ? db.regions : fresh.regions;
+    db.ageGroups = db.ageGroups && db.ageGroups.length ? db.ageGroups : fresh.ageGroups;
+    db.reports = db.reports || [];
+    db.settings = db.settings || fresh.settings;
+    localStorage.setItem(LS_KEY, JSON.stringify(db));
+  }
+  return db;
 }
 function saveDB(db){ localStorage.setItem(LS_KEY, JSON.stringify(db)); }
 function resetDB(){ localStorage.removeItem(LS_KEY); }
