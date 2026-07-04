@@ -139,6 +139,11 @@ function enterAdmin(u){
 (function initGate(){
   const s = Session.get();
   if(s && s.role==="admin"){ enterAdmin(s); }
+  else if(typeof DEV_SKIP_LOGIN!=="undefined" && DEV_SKIP_LOGIN){
+    const u = {...DEV_DEMO_USER.admin, role:"admin"};
+    Session.set(u);
+    enterAdmin(u);
+  }
 })();
 function nav(p, btn){
   document.querySelectorAll(".page").forEach(x=>x.classList.remove("on"));

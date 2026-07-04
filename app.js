@@ -103,13 +103,20 @@ const DB = {
 };
 
 /* ---------- session ---------- */
+// TEMP: 暫時skip login page,方便睇login打後嘅畫面。睇完想擋返login,將呢個set返做false。
+const DEV_SKIP_LOGIN = true;
+const DEV_DEMO_USER = { student:{uid:"s1", name:"Tyson"}, coach:{uid:"c1", name:"陳Sir"}, admin:{uid:"a1", name:"Admin"} };
 const Session = {
   set(u){ localStorage.setItem(SESSION_KEY, JSON.stringify(u)); },
   get(){ const r = localStorage.getItem(SESSION_KEY); return r?JSON.parse(r):null; },
   clear(){ localStorage.removeItem(SESSION_KEY); }
 };
 function requireRole(role){
-  const u = Session.get();
+  let u = Session.get();
+  if(DEV_SKIP_LOGIN && (!u || u.role!==role)){
+    u = {...DEV_DEMO_USER[role], role};
+    Session.set(u);
+  }
   if(!u || u.role!==role){ location.href = "index.html"; return null; }
   return u;
 }
