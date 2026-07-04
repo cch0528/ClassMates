@@ -1,11 +1,7 @@
 /* ===== ClassMates — shared data layer =====
-   DEMO MODE: 資料存喺 localStorage。
-   之後貼咗 firebaseConfig 落嚟,我哋下一步先正式駁 Firebase (Auth + Firestore + Storage)。
-*/
-const firebaseConfig = {
-  /* TODO: 貼你嘅 firebaseConfig 喺度 */
-};
-
+   Firebase config實際上放喺firebase-init.js。(呢度以前有個重複嘅firebaseConfig
+   placeholder,同firebase-init.js嗰個撞名,兩個<script>共用global scope,
+   令成個app.js一load就SyntaxError冧晒——已刪除。) */
 const LS_KEY = "coachup_db_v1";
 const SESSION_KEY = "coachup_session";
 
