@@ -67,16 +67,23 @@ function seedDB(){
 
   const now = new Date();
   const d = (offset,h)=>{const t=new Date(now); t.setDate(t.getDate()+offset); t.setHours(h,0,0,0); return t.toISOString();};
+  const proofPlaceholder = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
   const bookings = [
     {id:"b1", studentId:"s1", coachId:"c1", classId:"c1a", datetime:d(3,16), status:"pending_payment", studentName:"Tyson", phone:"9000 0001", studentAge:"9", notes:"仔仔第一次學", proof:"", createdAt:d(-1,10)},
     {id:"b2", studentId:"s1", coachId:"c3", classId:"c3b", datetime:d(5,19), status:"confirmed", studentName:"Tyson", phone:"9000 0001", studentAge:"", notes:"", proof:"", createdAt:d(-2,10)},
-    {id:"b3", studentId:"s1", coachId:"c2", classId:"c2b", datetime:d(-7,16), status:"completed", studentName:"Tyson", phone:"9000 0001", studentAge:"8", notes:"", proof:"", createdAt:d(-14,10)}
+    {id:"b3", studentId:"s1", coachId:"c2", classId:"c2b", datetime:d(-7,16), status:"completed", studentName:"Tyson", phone:"9000 0001", studentAge:"8", notes:"", proof:"", createdAt:d(-14,10)},
+    {id:"b4", studentId:"s1", coachId:"c1", classId:"c1b", datetime:d(4,19), status:"pending_verify", studentName:"Tyson", phone:"9000 0001", studentAge:"", notes:"想加強投籃", proof:proofPlaceholder, createdAt:d(-1,15)},
+    {id:"b5", studentId:"s1", coachId:"c5", classId:"c5a", datetime:d(-3,10), status:"cancelled", studentName:"Tyson", phone:"9000 0001", studentAge:"", notes:"", proof:"", lateCancel:false, createdAt:d(-6,10)}
   ];
   const reviews = [
     {id:"r1", bookingId:"x", coachId:"c1", studentName:"家長Amy", stars:5, comment:"好有耐性,個仔學得好開心!", createdAt:d(-20,10)},
     {id:"r2", bookingId:"x", coachId:"c2", studentName:"Ken", stars:5, comment:"考三級一Take過,勁!", createdAt:d(-30,10)}
   ];
-  const reports = [];
+  const reports = [
+    {id:"rp1", type:"cancel", desc:"教練臨開課前1小時話有事嚟唔到,冇提前通知。", reporterRole:"student", reporterName:"Tyson", reporterId:"s1", coachId:"c4", bookingId:"", status:"open", createdAt:d(-2,11)},
+    {id:"rp2", type:"quality", desc:"教學內容同page度寫嘅唔太相符,想了解下。", reporterRole:"student", reporterName:"阿信", reporterId:"s2", coachId:"c6", bookingId:"", status:"open", createdAt:d(-1,20)},
+    {id:"rp3", type:"payment", desc:"學員話已經轉數,但教練話未收到,後來核實係轉錯戶口,已補回。", reporterRole:"coach", reporterName:"阿樂", reporterId:"c3", coachId:"c3", bookingId:"", status:"resolved", createdAt:d(-10,9)}
+  ];
 
   // 教練驗證(資歷已人手核實)獨立於approved(上架與否)
   coaches.forEach(c=>{ c.verified = ["c1","c2"].includes(c.uid); });
