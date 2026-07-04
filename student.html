@@ -82,6 +82,11 @@
   <div class="sheet" id="reportSheet"></div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script src="firebase-init.js"></script>
 <script src="app.js"></script>
 <script>
 const me = requireRole("student");
@@ -330,17 +335,21 @@ function submitBooking(){
     agreedAt = new Date().toISOString();
   }
   const id = DB.uid();
+  let newBooking, updatedCoach;
   DB.update(db=>{
-    db.bookings.push({
+    newBooking = {
       id, studentId:me.uid, coachId:curCoach.uid, classId:curClass.id, datetime:curSlot,
       status:"pending_payment", studentName:name, phone,
       studentAge:document.getElementById("f_age").value.trim(),
       guardianName, guardianAgreedAt:agreedAt,
       notes:document.getElementById("f_notes").value.trim(),
-      proof:"", lateCancel:false, createdAt:new Date().toISOString()});
+      proof:"", lateCancel:false, createdAt:new Date().toISOString()};
+    db.bookings.push(newBooking);
     const c = db.coaches.find(x=>x.uid===curCoach.uid);
-    if(c) c.bookingCount = (c.bookingCount||0)+1;
+    if(c){ c.bookingCount = (c.bookingCount||0)+1; updatedCoach = c; }
   });
+  FS.pushBooking(newBooking);
+  FS.pushCoach(updatedCoach);
   closeSheet("formMask"); closeSheet("detailMask");
   toast("預約已建立!記得過數同上傳截圖");
   nav("book", document.querySelector('.bottomnav button[data-p="book"]'));
@@ -397,7 +406,9 @@ function cancelBooking(id){
     ? "距離開課少於24小時取消,將被標記為「late cancellation」交平台審核,教練可能收取部分費用。確定要取消?"
     : "確定取消呢個預約?(24小時前取消,免手續費)";
   if(!confirm(msg)) return;
-  DB.update(db=>{ const b = db.bookings.find(x=>x.id===id); if(b){ b.status="cancelled"; b.lateCancel=isLate; } });
+  let updated;
+  DB.update(db=>{ const b = db.bookings.find(x=>x.id===id); if(b){ b.status="cancelled"; b.lateCancel=isLate; updated=b; } });
+  FS.pushBooking(updated);
   renderBookings(); toast(isLate?"已取消(已標記為late cancellation)":"已取消");
 }
 
@@ -436,11 +447,14 @@ function submitProof(id){
   const b0 = db0.bookings.find(x=>x.id===id);
   const c0 = db0.coaches.find(x=>x.uid===b0.coachId);
   const mode = effectiveConfirmMode(c0, db0);
+  let updated;
   DB.update(db=>{
     const b = db.bookings.find(x=>x.id===id);
     b.proof = window._proofData;
     b.status = mode==="auto" ? "confirmed" : "pending_verify";
+    updated = b;
   });
+  FS.pushBooking(updated);
   closeSheet("proofMask");
   toast(mode==="auto" ? "已上傳,預約已確認!" : "已上傳,等教練核實");
   renderBookings();
@@ -467,6 +481,7 @@ function openRate(bid){
 }
 function submitRate(bid){
   const comment = document.getElementById("r_comment").value.trim();
+  let updatedCoach;
   DB.update(db=>{
     const b = db.bookings.find(x=>x.id===bid);
     db.reviews.push({id:DB.uid(), bookingId:bid, coachId:b.coachId, studentName:me.name,
@@ -475,11 +490,18 @@ function submitRate(bid){
     const total = (c.rating||0)*(c.ratingCount||0) + rateStars;
     c.ratingCount = (c.ratingCount||0)+1;
     c.rating = Math.round(total/c.ratingCount*10)/10;
+    updatedCoach = c;
   });
+  FS.pushCoach(updatedCoach);
   closeSheet("rateMask"); toast("多謝你嘅評價!"); renderBookings();
 }
 
 renderHome();
+FS.seedIfEmpty().then(()=> FS.initSync(()=>{
+  renderHome();
+  if(document.getElementById("pg-book").classList.contains("on")) renderBookings();
+  if(document.getElementById("pg-browse").classList.contains("on") && curCat) renderList();
+}));
 
 /* ---------- report / incident ---------- */
 function openReport(coachId, bookingId){
