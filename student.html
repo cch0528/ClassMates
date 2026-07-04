@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CoachUp HK — 學員</title>
+<title>ClassMates — 學員</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Noto+Sans+HK:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="app">
   <div class="topbar">
-    <div class="logo">Coach<span>Up</span></div>
+    <div class="logo">Class<span>Mates</span></div>
     <div class="spacer"></div>
     <div class="who" id="who"></div>
     <button class="iconbtn" onclick="logout()">登出</button>
@@ -76,6 +76,10 @@
 <!-- 評價 sheet -->
 <div class="sheet-mask" id="rateMask" onclick="if(event.target===this)closeSheet('rateMask')">
   <div class="sheet" id="rateSheet"></div>
+</div>
+<!-- 舉報/事故 sheet -->
+<div class="sheet-mask" id="reportMask" onclick="if(event.target===this)closeSheet('reportMask')">
+  <div class="sheet" id="reportSheet"></div>
 </div>
 
 <script src="app.js"></script>
@@ -200,7 +204,7 @@ function coachCard(c){
   return `<div class="ccard" onclick="openCoach('${c.uid}')">
     <div class="ph">${c.em}</div>
     <div class="bd">
-      <div class="nm">${c.name} <span class="badge">✓${c.lessons}堂</span></div>
+      <div class="nm">${c.name} <span class="badge">✓${c.lessons}堂</span>${c.verified?'<span class="verified">🛡️已驗證</span>':""}</div>
       <div class="stars">${starsStr(c.rating)} <small>${c.rating||"–"} (${c.ratingCount})</small></div>
       <div class="mt">📍${c.region} · $${isFinite(minRate)?minRate:"–"}/hr起</div>
     </div></div>`;
@@ -235,7 +239,7 @@ function renderDetail(){
     <div class="dhead">
       <div class="av">${c.em}</div>
       <div>
-        <h2>${c.name}</h2>
+        <h2>${c.name}${c.verified?'<span class="verified" style="margin-left:6px">🛡️已驗證資歷</span>':""}</h2>
         <div class="stars">${starsStr(c.rating)} ${c.rating||"–"} (${c.ratingCount}) · ✓已授課${c.lessons}堂</div>
         <div class="mt">📍${c.region} · ${mode==="auto"?"⚡上傳付款即自動確認":"🕐 教練核實付款後確認"}</div>
       </div>
@@ -267,6 +271,7 @@ function renderDetail(){
     }
     html += `<div style="margin-top:16px"><button class="btn primary block" ${curSlot?"":"disabled"} onclick="openBookingForm()">立即預約</button></div>`;
   }
+  html += `<div style="margin-top:10px;text-align:center"><span class="crumb" onclick="openReport('${c.uid}','')">🚩 舉報呢個教練</span></div>`;
   if(reviews.length){
     html += `<div class="sec-title">學員評價</div>` + reviews.map(r=>`
       <div class="bcard"><div class="row1"><div class="nm">${r.studentName}</div><div class="stars" style="color:var(--yellow);font-size:.85rem">${starsStr(r.stars)}</div></div>
@@ -372,6 +377,8 @@ function renderBookings(){
       acts += `<button class="btn sm danger" onclick="cancelBooking('${b.id}')">取消預約</button>`;
     if(b.status==="completed" && !reviewed)
       acts += `<button class="btn sm ghost" onclick="openRate('${b.id}')">⭐ 留評價</button>`;
+    if(["confirmed","completed"].includes(b.status))
+      acts += `<button class="btn sm ghost" onclick="openReport('${c.uid}','${b.id}')">🚩 舉報/事故</button>`;
     return `<div class="bcard">
       <div class="row1"><div class="nm">${c.em} ${c.name}${cl?` · ${cl.ageGroup}`:""}</div>
         <span class="st ${b.status}">${statusLabel(b.status)}</span></div>
@@ -473,6 +480,47 @@ function submitRate(bid){
 }
 
 renderHome();
+
+/* ---------- report / incident ---------- */
+function openReport(coachId, bookingId){
+  const db = DB.get();
+  const c = db.coaches.find(x=>x.uid===coachId);
+  document.getElementById("reportSheet").innerHTML = `
+    <div class="grab"></div>
+    <h2>舉報 / 事故報告</h2>
+    <div class="mt" style="color:var(--ink-2);font-size:.85rem;margin-top:4px">關於:${c?c.name:"教練"}</div>
+    <div class="frm">
+      <label>類別</label>
+      <select id="rp_type">
+        <option value="cancel">教練甩底/臨時取消</option>
+        <option value="conduct">行為不當</option>
+        <option value="quality">教學質素爭議</option>
+        <option value="payment">付款糾紛</option>
+        <option value="injury">受傷/意外事故</option>
+        <option value="other">其他</option>
+      </select>
+      <label>詳細描述</label>
+      <textarea id="rp_desc" rows="4" placeholder="請描述事情經過、時間、地點…"></textarea>
+      <div class="payinfo" style="background:#FFF0F0;border-color:#FFD0D0">
+        ⚠️ 如涉及對兒童嘅懷疑虐待或不當接觸,平台有責任通知相關執法/福利機構,唔會單靠內部調解處理。
+      </div>
+      <button class="btn danger block" onclick="submitReport('${coachId}','${bookingId}')">提交舉報</button>
+    </div>`;
+  openSheet("reportMask");
+}
+function submitReport(coachId, bookingId){
+  const desc = document.getElementById("rp_desc").value.trim();
+  if(!desc) return toast("請填寫詳細描述");
+  DB.update(db=>{
+    db.reports.push({
+      id:DB.uid(), type:document.getElementById("rp_type").value, desc,
+      reporterRole:"student", reporterName:me.name, reporterId:me.uid,
+      coachId, bookingId, status:"open", createdAt:new Date().toISOString()
+    });
+  });
+  closeSheet("reportMask");
+  toast("已提交,平台會於數日內跟進");
+}
 </script>
 </body>
 </html>
